@@ -130,7 +130,12 @@ def edit(args, data):
 
 
 def ls(args, data):
-    raise NotImplementedError
+    padding = len(str(len(data["tasks"]))) + 1
+    for task_id, task in enumerate(data["tasks"]):
+        if task:
+            rev_id = task["revs"][-1]
+            rev = data["revs"][rev_id]
+            print(str(task_id).rjust(padding), rev["task"])
 
 
 def rm(args, data):
@@ -199,6 +204,9 @@ if __name__ == "__main__":
     )
     parser_edit.add_argument("-d", "--due")
     parser_edit.add_argument("-D", "--remove-due")
+
+    # mask ls
+    parser_ls = subparsers.add_parser(name="ls")
 
     # mask rm
     parser_rm = subparsers.add_parser(name="rm")
