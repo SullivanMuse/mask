@@ -4,31 +4,75 @@ import datetime
 import json
 import os
 
-TASKS_FILE = os.path.expanduser("~/.tasks")
+MASK_FILE = os.path.expanduser("~/.mask")
 
 
-def init(args):
-    if os.path.isfile(TASKS_FILE):
-        try:
-            with open(TASKS_FILE, "r") as file:
-                data = json.load(file)
-        except json.JSONDecodeError:
-            print(
-                ".tasks already exists, but is not valid; move or remove it before runnin `tasks init`"
-            )
-            exit(1)
-        print(".tasks already exists")
-        exit(1)
-    else:
-        with open(TASKS_FILE, "x") as file:
+def counter(start=0):
+    def count():
+        nonlocal start
+        out = start
+        start += 1
+        return out
+
+    return count
+
+
+count = counter(1)
+
+
+def exit_failure(message):
+    code = count()
+
+    def f():
+        print(message)
+        exit(code)
+
+    return f
+
+
+def exit_success():
+    print("Success")
+    exit(0)
+
+
+exit_no_mask_file = exit_failure(f"{MASK_FILE} does not exist; run `mask init`")
+exit_invalid_mask_file = exit_failure(
+    f"{MASK_FILE} exists but is not valid; remove {MASK_FILE} and then run `mask init`"
+)
+exit_mask_already_exists = exit_failure(f"{MASK_FILE} already exists")
+exit_user_abort = exit_failure("User chose to abort")
+
+
+def init():
+    try:
+        with open(MASK_FILE, "r") as file:
+            json.load(file)
+        exit_mask_already_exists()
+    except FileNotFoundError:
+        with open(MASK_FILE, "x") as file:
             json.dump({"version": "0.0.1", "revs": [], "tasks": []}, file)
-        print("created .tasks")
+        exit_success()
+    except json.JSONDecodeError:
+        exit_invalid_mask_file()
 
 
-def add(args):
-    with open(TASKS_FILE, "r") as file:
-        data = json.load(file)
+def load():
+    try:
+        with open(MASK_FILE, "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        exit_no_mask_file()
+    except json.JSONDecodeError:
+        exit_invalid_mask_file()
 
+
+def write(data):
+    content = json.dumps(data)
+    with open(MASK_FILE, "w+") as file:
+        file.write(content)
+
+
+def add(args, data):
     # Create first rev
     rev = {
         "task": args.task,
@@ -49,17 +93,12 @@ def add(args):
     }
     task_id = len(data["tasks"])
     data["tasks"].append(task)
+
+    # Print task id for future reference
     print(task_id)
 
-    content = json.dumps(data)
-    with open(TASKS_FILE, "w") as file:
-        file.write(content)
 
-
-def edit(args):
-    with open(TASKS_FILE, "r") as file:
-        data = json.load(file)
-
+def edit(args, data):
     revs = data["revs"]
     task_rev_ids = data["tasks"][args.task_id]["revs"]
 
@@ -87,25 +126,22 @@ def edit(args):
     # Append rev to task
     task_rev_ids.append(rev_id)
 
-    content = json.dumps(data)
-    with open(TASKS_FILE, "w") as file:
-        file.write(content)
 
-
-def ls(args):
+def ls(args, data):
     raise NotImplementedError
 
 
-def rm(args):
-    # Confirm
-    user_input = input("Are you sure? (y/N) ")
-    if user_input.lower() != "y":
-        print("Aborting.")
-        exit(0)
+def rm(args, data):
+    # Print tasks so the user knows what they are deleting
+    for task_id in args.task_id:
+        latest_rev_id = data["tasks"][task_id]["revs"][-1]
+        latest_rev = data["revs"][latest_rev_id]
+        print(latest_rev["name"])
 
-    # Load the data
-    with open(TASKS_FILE, "r") as file:
-        data = json.load(file)
+    # Confirm
+    user_input = input("Are you sure you want to delete these tasks? (y/N) ")
+    if user_input.lower() != "y":
+        exit_user_abort()
 
     # Clear all revs and clear the task
     for task_id in args.task_id:
@@ -115,36 +151,35 @@ def rm(args):
             data["revs"][rev_id].clear()
         task.clear()
 
-    # Write to disk
-    content = json.dumps(data)
-    with open(TASKS_FILE, "w") as file:
-        file.write(content)
 
-
-def gc(args):
+def gc(args, data):
     raise NotImplementedError
 
 
-def mark(args):
+def mark(args, data):
     raise NotImplementedError
 
 
-def migrate(args):
+def migrate(args, data):
     raise NotImplementedError
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
+    parser.add_argument("--verbose", action="store_true")
     subparsers = parser.add_subparsers(dest="subparser")
+
+    # mask init
     parser_init = subparsers.add_parser(name="init")
 
+    # mask add
     parser_add = subparsers.add_parser(name="add")
     parser_add.add_argument("task")
     parser_add.add_argument("-a", "--after", nargs="*", action="extend", default=[])
     parser_add.add_argument("-b", "--before", nargs="*", action="extend", default=[])
     parser_add.add_argument("-d", "--due")
 
+    # mask edit
     parser_edit = subparsers.add_parser(name="edit")
     parser_edit.add_argument("task_id")
     parser_edit.add_argument("-n", "--name")
@@ -163,21 +198,29 @@ if __name__ == "__main__":
     parser_edit.add_argument("-d", "--due")
     parser_edit.add_argument("-D", "--remove-due")
 
+    # mask rm
     parser_rm = subparsers.add_parser(name="rm")
     parser_rm.add_argument("task_id", nargs="*")
 
     args = parser.parse_args()
 
-    print(args)
+    if args.verbose:
+        print(args)
 
-    {
-        "init": init,
-        "add": add,
-        "edit": edit,
-        "ls": ls,
-        "gc": gc,
-        "rm": rm,
-        "migrate": migrate,
-        "mark": mark,
-        None: hlp,
-    }[args.subparser](args)
+    if args.subparser == "init":
+        init()
+    else:
+        # Select the appropriate function
+        f = {
+            "add": add,
+            "edit": edit,
+            "ls": ls,
+            "gc": gc,
+            "rm": rm,
+            "migrate": migrate,
+            "mark": mark,
+        }[args.subparser]
+
+        data = load()
+        f(args, data)
+        write(data)
