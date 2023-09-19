@@ -2,7 +2,7 @@
 
 import argparse
 import copy
-import datetime
+import datetime as dt
 import json
 import os
 
@@ -80,11 +80,11 @@ def add(args, data):
         "task": args.task,
         "after": args.after,
         "before": args.before,
-        "due": datetime.datetime.fromisoformat(args.due).isoformat()
+        "due": dt.datetime.fromisoformat(args.due).isoformat()
         if args.due is not None
         else None,
         # Metadata
-        "created": datetime.datetime.now().isoformat(),
+        "created": dt.datetime.now().isoformat(),
     }
     rev_id = len(data["revs"])
     data["revs"].append(rev)
@@ -109,19 +109,26 @@ def edit(args, data):
     rev = copy.deepcopy(prev_rev)
     if args.name is not None:
         rev["name"] = args.name
+
+    # After
     if args.after is not None:
         rev["after"].extend(args.after)
     if args.remove_after is not None:
-        raise NotImplementedError
+        rev["after"].clear()
+
+    # Before
     if args.before is not None:
         rev["before"].extend(args.before)
     if args.remove_before is not None:
-        raise NotImplementedError
+        rev["before"].clear()
+
+    # Due date
     if args.due is not None:
-        rev["due"] = datetime.datetime.fromisoformat(args.due).isoformat()
+        rev["due"] = dt.datetime.fromisoformat(args.due).isoformat()
     if args.remove_due is not None:
         rev["due"] = None
-    rev["created"] = datetime.datetime.now().isoformat()
+
+    rev["created"] = dt.datetime.now().astimezone(dt.timezone.utc).isoformat()
     rev_id = len(data["revs"])
     revs.append(rev)
 
