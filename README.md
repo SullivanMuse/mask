@@ -5,11 +5,11 @@ The magical task list.
 ## CLI
 
 ```
-task init
-task add
-task edit
-task mark
-task list
-task gc
-task migrate
+mask init
+mask add
+mask edit
+mask mark
+mask list
+mask gc
+mask migrate
 ```
