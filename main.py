@@ -24,7 +24,7 @@ def init(args):
 def add(args):
     with open(TASKS_FILE, "r") as file:
         data = json.load(file)
-    
+
     # Create first rev
     rev = {
         "task": args.task,
@@ -89,15 +89,25 @@ def ls(args):
     raise NotImplementedError
 
 def rm(args):
+    # Confirm
     user_input = input("Are you sure? (y/N) ")
     if user_input.lower() != "y":
         print("Aborting.")
         exit(0)
+
+    # Load the data
     with open(TASKS_FILE, "r") as file:
         data = json.load(file)
 
-    # Delete the task
-    
+    # Clear all revs and clear the task
+    for task_id in args.task_id:
+        task = data["tasks"][task_id]
+        task_rev_ids = task["revs"]
+        for rev_id in task_rev_ids:
+            data["revs"][rev_id].clear()
+        task.clear()
+
+    # Write to disk
     content = json.dumps(data)
     with open(TASKS_FILE, "w") as file:
         file.write(content)
